@@ -155,25 +155,30 @@ export default function NewSearch() {
         const res = await getAnalysisProgress(analysisId);
         failCount = 0;
         const { progress, current_step, status, error_message } = res.data;
-        setAnalysisProgress(progress);
-        setAnalysisStep(current_step);
+        
+        // Ensure progress looks responsive and never regresses below 10%
+        setAnalysisProgress(Math.max(progress, status === 'processing' ? 15 : 8));
+        setAnalysisStep(current_step || 'Processing CCTV video frames...');
 
         if (status === 'completed') {
           clearInterval(interval);
+          setAnalysisProgress(100);
+          setAnalysisStep('Analysis complete! Redirecting to surveillance player...');
           setAnalyzing(false);
-          setTimeout(() => navigate(`/results/${analysisId}`), 500);
+          setTimeout(() => navigate(`/results/${analysisId}`), 600);
         } else if (status === 'failed') {
           clearInterval(interval);
           setAnalyzing(false);
-          setError(error_message || 'Analysis failed');
+          setError(error_message || 'Analysis failed. Please check video format or try again.');
         }
       } catch (pollErr) {
         failCount += 1;
-        if (pollErr.response?.status === 404 || failCount >= 4) {
+        // Allow up to 15 retries (~22s) in case Render container is momentarily busy with CPU
+        if (pollErr.response?.status === 404 || failCount >= 15) {
           clearInterval(interval);
           setAnalyzing(false);
           setAnalysisId(null);
-          setError('Analysis session reset. Please click Start Analysis again.');
+          setError('Backend connection timed out or analysis was interrupted. Please retry.');
         }
       }
     }, 1500);

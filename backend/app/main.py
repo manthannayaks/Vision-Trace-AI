@@ -7,6 +7,13 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 import torch
 
+# Constrain PyTorch CPU threads to keep peak RAM well within 512MB on containerized cloud runners (Render)
+try:
+    torch.set_num_threads(1)
+    torch.set_num_interop_threads(1)
+except Exception:
+    pass
+
 from app.config import settings
 from app.database.database import init_db, get_db
 from app.database import models, schemas

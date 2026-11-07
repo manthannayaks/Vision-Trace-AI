@@ -1,16 +1,17 @@
 import os
 import cv2
 import json
+import gc
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional, Callable, Tuple, List
 from sqlalchemy.orm import Session
+import torch
 
 from app.config import settings
 from app.database import models
 from app.utils.video_utils import create_video_writer
 from app.utils.image_utils import save_image
-from app.ml.detector import PersonDetector
 from app.ml.tracker import PersonTracker
 from app.ml.clip_matcher import ClipMatcher
 from app.ml.attributes import AttributeExtractor
@@ -21,18 +22,41 @@ from app.processing.annotation import VideoAnnotator
 
 logger = logging.getLogger(__name__)
 
+# Shared singletons to prevent multiple model instances exhausting memory
+_shared_tracker: Optional[PersonTracker] = None
+_shared_clip: Optional[ClipMatcher] = None
+_shared_attr: Optional[AttributeExtractor] = None
+
+def get_shared_tracker() -> PersonTracker:
+    global _shared_tracker
+    if _shared_tracker is None:
+        _shared_tracker = PersonTracker()
+    return _shared_tracker
+
+def get_shared_clip() -> ClipMatcher:
+    global _shared_clip
+    if _shared_clip is None:
+        _shared_clip = ClipMatcher()
+    return _shared_clip
+
+def get_shared_attr(clip_matcher: ClipMatcher) -> AttributeExtractor:
+    global _shared_attr
+    if _shared_attr is None:
+        _shared_attr = AttributeExtractor(clip_matcher=clip_matcher)
+    return _shared_attr
+
 class VideoProcessor:
     """
     Complete CCTV Person Tracking & Multimodal Appearance Retrieval Pipeline.
     Processes video, extracts tracks, computes sightings, evaluates against search query,
     annotates footage, and writes structured records to database.
+    Optimized for low-memory cloud runtimes (keeps at most ONE frame in RAM).
     """
     def __init__(self, db: Session):
         self.db = db
-        self.detector = PersonDetector()
-        self.tracker = PersonTracker()
-        self.clip_matcher = ClipMatcher()
-        self.attribute_extractor = AttributeExtractor(clip_matcher=self.clip_matcher)
+        self.tracker = get_shared_tracker()
+        self.clip_matcher = get_shared_clip()
+        self.attribute_extractor = get_shared_attr(self.clip_matcher)
         self.ranking_engine = RankingEngine()
         self.counting_engine = CountingEngine()
 
@@ -112,19 +136,28 @@ class VideoProcessor:
                 self.tracker.reset()
                 total_sampled_frames = meta["total_frames"] // job.sample_rate
                 frame_count = 0
-                all_frame_tracks = []  # List of (timestamp, tracks) for annotation pass
+                frame_records: Dict[int, Tuple[float, List[Dict[str, Any]]]] = {}
 
                 update_progress(15.0, "Tracking persons across frames")
 
-                for frame_idx, timestamp, frame in extractor.iterate_frames():
-                    frame_count += 1
-                    tracks = self.tracker.track_frame(frame, timestamp, frame_idx)
-                    all_frame_tracks.append((timestamp, tracks, frame))
+                with torch.inference_mode():
+                    for frame_idx, timestamp, frame in extractor.iterate_frames():
+                        frame_count += 1
+                        tracks = self.tracker.track_frame(frame, timestamp, frame_idx)
+                        # Store lightweight detection coordinates only (NEVER keep full frame arrays in memory)
+                        lightweight_tracks = [
+                            {"track_id": t["track_id"], "bbox": t["bbox"], "confidence": t["confidence"]}
+                            for t in tracks
+                        ]
+                        frame_records[frame_idx] = (timestamp, lightweight_tracks)
 
-                    # Periodic progress reporting
-                    if total_sampled_frames > 0 and frame_count % 10 == 0:
-                        pct = 15.0 + min(55.0, (frame_count / total_sampled_frames) * 55.0)
-                        update_progress(pct, f"Analyzing frame {frame_count}/{total_sampled_frames}")
+                        # Periodic progress reporting
+                        if total_sampled_frames > 0 and frame_count % 5 == 0:
+                            pct = 15.0 + min(55.0, (frame_count / total_sampled_frames) * 55.0)
+                            update_progress(pct, f"Analyzing frame {frame_count}/{total_sampled_frames}")
+
+            # Reclaim tracking tensors from RAM immediately
+            gc.collect()
 
             # 3. Aggregating Tracks and Sighting Metrics
             update_progress(72.0, "Synthesizing sighting metrics and representative appearances")
@@ -184,11 +217,12 @@ class VideoProcessor:
 
                 # Candidate similarity comparison
                 if query and track_info.representative_crop is not None:
-                    match_scores = self.clip_matcher.match_candidate(
-                        candidate_crop=track_info.representative_crop,
-                        ref_image_emb=ref_img_emb,
-                        ref_text_emb=ref_txt_emb
-                    )
+                    with torch.inference_mode():
+                        match_scores = self.clip_matcher.match_candidate(
+                            candidate_crop=track_info.representative_crop,
+                            ref_image_emb=ref_img_emb,
+                            ref_text_emb=ref_txt_emb
+                        )
                     candidates_for_ranking.append({
                         "track_db_id": db_track.id,
                         "track_id": t_id,
@@ -224,19 +258,23 @@ class VideoProcessor:
                     self.db.add(match_obj)
                 self.db.commit()
 
-            # 6. Render Annotated Video Output (if not skipped for lightweight storage)
+            # 6. Render Annotated Video Output (streams frame-by-frame without memory buildup)
             if writer is not None:
                 update_progress(92.0, "Rendering annotated video output with detections")
-                for timestamp, tracks, frame in all_frame_tracks:
-                    annotated = VideoAnnotator.annotate_frame(
-                        frame=frame,
-                        tracks=tracks,
-                        timestamp=timestamp,
-                        matching_track_scores=matching_track_scores
-                    )
-                    writer.write(annotated)
+                with FrameExtractor(video_path, sample_rate=job.sample_rate) as annot_extractor:
+                    for frame_idx, timestamp, frame in annot_extractor.iterate_frames():
+                        tracks = frame_records.get(frame_idx, (timestamp, []))[1]
+                        annotated = VideoAnnotator.annotate_frame(
+                            frame=frame,
+                            tracks=tracks,
+                            timestamp=timestamp,
+                            matching_track_scores=matching_track_scores
+                        )
+                        writer.write(annotated)
                 writer.release()
+                writer = None
                 video.processed_video_path = str(output_video_path)
+                gc.collect()
             else:
                 video.processed_video_path = None
 
