@@ -9,8 +9,9 @@ aiofiles>=23.2.1
 websockets>=12.0
 
 # Computer Vision & Machine Learning
-torch>=2.1.0
-torchvision>=0.16.0
+# Note: torch and torchvision are installed via CPU wheel index to prevent 2.5GB CUDA bloat
+# torch>=2.1.0
+# torchvision>=0.16.0
 ultralytics>=8.1.0
 lapx>=0.13.0
 transformers>=4.38.0

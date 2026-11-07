@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional, Union
 import numpy as np
 import torch
 from PIL import Image
-from transformers import CLIPProcessor, CLIPModel
+from transformers import CLIPTokenizer, CLIPImageProcessor, CLIPProcessor, CLIPModel
 from app.config import settings
 from app.utils.image_utils import cv2_to_pil
 
@@ -27,12 +27,16 @@ class ClipMatcher:
         try:
             logger.info(f"Loading CLIP model '{self.model_name}' on device '{self.device}'...")
             try:
-                # First attempt local cache only to avoid network timeout
-                self.processor = CLIPProcessor.from_pretrained(self.model_name, local_files_only=True)
+                # First attempt local cache only to avoid network timeout and Hugging Face retry loops
+                tokenizer = CLIPTokenizer.from_pretrained(self.model_name, local_files_only=True)
+                image_processor = CLIPImageProcessor.from_pretrained(self.model_name, local_files_only=True)
+                self.processor = CLIPProcessor(image_processor=image_processor, tokenizer=tokenizer)
                 self.model = CLIPModel.from_pretrained(self.model_name, local_files_only=True).to(self.device)
-            except Exception:
-                # Fallback to standard loading
-                self.processor = CLIPProcessor.from_pretrained(self.model_name)
+            except Exception as local_err:
+                logger.info(f"Local files not found ({local_err}), downloading from hub...")
+                tokenizer = CLIPTokenizer.from_pretrained(self.model_name)
+                image_processor = CLIPImageProcessor.from_pretrained(self.model_name)
+                self.processor = CLIPProcessor(image_processor=image_processor, tokenizer=tokenizer)
                 self.model = CLIPModel.from_pretrained(self.model_name).to(self.device)
             self.model.eval()
             logger.info("CLIP model loaded successfully.")
