@@ -38,6 +38,7 @@ export const createSearchQuery = (formData) =>
   api.post('/search/create', formData, {
     headers: { 'Content-Type': undefined },
   });
+export const createSearchQueryJSON = (data) => api.post('/search/create-json', data);
 export const getSearchQueries = () => api.get('/search/');
 
 // Analysis

@@ -4,7 +4,7 @@ import {
   Upload, Image, FileText, Play, X, CheckCircle2,
   Video, User, Loader2, AlertTriangle, ChevronDown, ChevronUp
 } from 'lucide-react';
-import { uploadVideo, createSearchQuery, startAnalysis, getAnalysisProgress } from '../services/api';
+import { uploadVideo, createSearchQuery, createSearchQueryJSON, startAnalysis, getAnalysisProgress } from '../services/api';
 
 const STEPS = ['Upload Video', 'Describe Person', 'Analyze'];
 
@@ -53,6 +53,7 @@ export default function NewSearch() {
   // Step 2: Person description
   const [referenceImage, setReferenceImage] = useState(null);
   const [referencePreview, setReferencePreview] = useState(null);
+  const [referenceBase64, setReferenceBase64] = useState(null);
   const [description, setDescription] = useState('');
   const [searchMode, setSearchMode] = useState('both');
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -146,16 +147,17 @@ export default function NewSearch() {
     try {
       let qId = queryData?.id || null;
 
-      // 1. Create search query profile
-      if (!qId && (referenceImage || description.trim())) {
-        const formData = new FormData();
-        if (referenceImage) formData.append('reference_image', referenceImage);
-        if (description.trim()) formData.append('description', description.trim());
-        formData.append('search_mode', searchMode);
-        formData.append('image_weight', imageWeight);
-        formData.append('text_weight', textWeight);
-
-        const qRes = await createSearchQuery(formData);
+      // 1. Create search query profile via pure JSON (immune to HTTP/2 multipart issues)
+      if (!qId && (referenceBase64 || description.trim())) {
+        const payload = {
+          description: description.trim() || null,
+          search_mode: searchMode,
+          image_weight: imageWeight,
+          text_weight: textWeight,
+          reference_image_base64: referenceBase64 || null,
+          reference_image_filename: referenceImage?.name || 'reference.jpg',
+        };
+        const qRes = await createSearchQueryJSON(payload);
         qId = qRes.data.id;
         setQueryData(qRes.data);
       }
@@ -216,6 +218,7 @@ export default function NewSearch() {
   const removeImage = () => {
     setReferenceImage(null);
     setReferencePreview(null);
+    setReferenceBase64(null);
   };
 
   return (
@@ -365,6 +368,9 @@ export default function NewSearch() {
                       if (f) {
                         setReferenceImage(f);
                         setReferencePreview(URL.createObjectURL(f));
+                        const reader = new FileReader();
+                        reader.onload = (ev) => setReferenceBase64(ev.target.result);
+                        reader.readAsDataURL(f);
                       }
                     }}
                   />
