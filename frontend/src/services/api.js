@@ -6,6 +6,7 @@ const API_BASE = BASE_HOST ? `${BASE_HOST}/api` : '/api';
 
 const api = axios.create({
   baseURL: API_BASE,
+  timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
 
