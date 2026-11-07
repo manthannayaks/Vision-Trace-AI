@@ -36,8 +36,9 @@ async def create_search_query(
         unique_img_name = generate_unique_filename(reference_image.filename, prefix="ref")
         save_path = settings.UPLOAD_DIR / unique_img_name
         try:
+            contents = await reference_image.read()
             with open(save_path, "wb") as buffer:
-                shutil.copyfileobj(reference_image.file, buffer)
+                buffer.write(contents)
             ref_image_path = str(save_path)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to store reference photograph: {e}")

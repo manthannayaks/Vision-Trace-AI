@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Set
 
 ALLOWED_VIDEO_EXTENSIONS: Set[str] = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
-ALLOWED_IMAGE_EXTENSIONS: Set[str] = {".jpg", ".jpeg", ".png", ".webp"}
+ALLOWED_IMAGE_EXTENSIONS: Set[str] = {".jpg", ".jpeg", ".png", ".webp", ".jfif", ".bmp", ".heic", ".tiff"}
 
 def sanitize_filename(filename: str) -> str:
     """Sanitize filename to prevent directory traversal and remove unsafe chars."""

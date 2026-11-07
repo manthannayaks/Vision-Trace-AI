@@ -23,7 +23,7 @@ export const getDashboardStats = () => api.get('/dashboard/stats');
 // Videos
 export const uploadVideo = (formData, onProgress) =>
   api.post('/videos/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: { 'Content-Type': undefined },
     onUploadProgress: (e) => {
       if (onProgress && e.total) onProgress(Math.round((e.loaded * 100) / e.total));
     },
@@ -35,7 +35,7 @@ export const deleteVideo = (id) => api.delete(`/videos/${id}`);
 // Search Queries
 export const createSearchQuery = (formData) =>
   api.post('/search/create', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: { 'Content-Type': undefined },
   });
 export const getSearchQueries = () => api.get('/search/');
 
