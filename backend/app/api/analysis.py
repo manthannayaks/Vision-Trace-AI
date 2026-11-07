@@ -102,3 +102,13 @@ def list_analysis_jobs(db: Session = Depends(get_db)):
     """List recent analysis jobs."""
     return db.query(models.AnalysisJob).order_by(models.AnalysisJob.created_at.desc()).limit(20).all()
 
+@router.delete("/{analysis_id}")
+def delete_analysis_job(analysis_id: int, db: Session = Depends(get_db)):
+    """Cancel or delete an analysis job record."""
+    job = db.query(models.AnalysisJob).filter(models.AnalysisJob.id == analysis_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Analysis job not found")
+    db.delete(job)
+    db.commit()
+    return {"status": "deleted", "id": analysis_id}
+

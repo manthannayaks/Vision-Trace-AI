@@ -260,7 +260,7 @@ class VideoProcessor:
                 "video_id": video.id,
                 "unique_tracks": video.unique_tracks_count,
                 "total_sightings": video.total_sightings_count,
-                "matches_found": len(matching_track_ids),
+                "matches_found": len(matching_track_scores),
                 "output_video": str(output_video_path) if output_video_path else None,
                 "raw_video_retained": not should_delete_raw
             }

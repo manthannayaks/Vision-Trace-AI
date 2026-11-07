@@ -61,7 +61,7 @@ export default function NewSearch() {
   const [queryData, setQueryData] = useState(null);
 
   // Step 3: Analysis
-  const [sampleRate, setSampleRate] = useState(2);
+  const [sampleRate, setSampleRate] = useState(3);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisStep, setAnalysisStep] = useState('');
@@ -163,7 +163,7 @@ export default function NewSearch() {
         sample_rate: sampleRate,
         image_weight: imageWeight,
         text_weight: textWeight,
-        auto_delete_raw: true,
+        auto_delete_raw: false,
         skip_annotated_video: false,
       });
       setAnalysisId(res.data.id);

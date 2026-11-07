@@ -44,6 +44,7 @@ export const startAnalysis = (data) => api.post('/analysis/start', data);
 export const getAnalysisStatus = (id) => api.get(`/analysis/${id}`);
 export const getAnalysisProgress = (id) => api.get(`/analysis/${id}/progress`);
 export const getAnalysisJobs = () => api.get('/analysis/');
+export const deleteAnalysisJob = (id) => api.delete(`/analysis/${id}`);
 
 // Results
 export const getAnalysisResults = (analysisId, params = {}) =>
