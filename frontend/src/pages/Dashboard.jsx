@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDashboardStats, getHealth } from '../services/api';
+import { getDashboardStats, getHealth, getFileUrl } from '../services/api';
 import {
   Video, Users, Fingerprint, Eye, Search, ArrowRight,
   Cpu, Activity, CheckCircle2, AlertCircle
@@ -164,7 +164,7 @@ export default function Dashboard() {
                   <div className="flex items-center gap-3">
                     {match.representative_image_url ? (
                       <img
-                        src={match.representative_image_url}
+                        src={getFileUrl(match.representative_image_url)}
                         alt="Candidate"
                         className="w-10 h-10 rounded-lg object-cover border border-gray-700"
                       />

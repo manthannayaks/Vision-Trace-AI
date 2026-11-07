@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: visiontrack-ai-backend
+    env: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: "pip install --upgrade pip && pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8
+      - key: AUTO_DELETE_UPLOADED_VIDEO
+        value: "true"
+      - key: KEEP_ONLY_CANDIDATE_CROPS
+        value: "false"
+

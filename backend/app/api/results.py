@@ -36,11 +36,15 @@ def get_analysis_results(
 
     matches = matches_query.order_by(models.MatchResult.combined_score.desc()).all()
 
+    # Resolve threshold and tier if called directly outside FastAPI injection
+    threshold = float(min_score) if isinstance(min_score, (int, float)) else float(getattr(min_score, 'default', 0.0))
+    tier_val = tier if isinstance(tier, str) else getattr(tier, 'default', None)
+
     # If no search query was attached to the job, retrieve all detected person tracks
     candidates = []
     if matches:
         for m in matches:
-            if m.combined_score < min_score:
+            if m.combined_score < threshold:
                 continue
 
             track = m.track
@@ -49,8 +53,8 @@ def get_analysis_results(
             attributes = json.loads(track.detected_attributes) if track.detected_attributes else {}
 
             # Filter by tier if specified
-            if tier:
-                t_lower = tier.lower()
+            if tier_val:
+                t_lower = tier_val.lower()
                 r_tier = evidence.get("ranking_tier", "").lower()
                 if t_lower == "high" and "high" not in r_tier:
                     continue

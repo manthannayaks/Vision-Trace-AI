@@ -1,9 +1,20 @@
 import axios from 'axios';
 
+// Backend base URL (empty on local development or when using Vercel rewrites)
+const BASE_HOST = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/+$/, '') : '';
+const API_BASE = BASE_HOST ? `${BASE_HOST}/api` : '/api';
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
 });
+
+// Helper to convert relative media paths (/api/files/...) to absolute URLs on Vercel
+export const getFileUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  return `${BASE_HOST}${path}`;
+};
 
 // Health & Dashboard
 export const getHealth = () => api.get('/health');
