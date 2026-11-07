@@ -184,9 +184,11 @@ export default function NewSearch() {
   // Poll analysis progress
   useEffect(() => {
     if (!analysisId) return;
+    let failCount = 0;
     const interval = setInterval(async () => {
       try {
         const res = await getAnalysisProgress(analysisId);
+        failCount = 0; // reset on success
         const { progress, current_step, status, error_message } = res.data;
         setAnalysisProgress(progress);
         setAnalysisStep(current_step);
@@ -201,8 +203,15 @@ export default function NewSearch() {
           setAnalyzing(false);
           setError(error_message || 'Analysis failed');
         }
-      } catch {
-        // Silently retry
+      } catch (pollErr) {
+        failCount += 1;
+        // If 404 or fails 3 times in a row, server was redeployed or job lost
+        if (pollErr.response?.status === 404 || failCount >= 4) {
+          clearInterval(interval);
+          setAnalyzing(false);
+          setAnalysisId(null);
+          setError('Analysis session expired or server redeployed. Please click Start Analysis again.');
+        }
       }
     }, 1500);
     return () => clearInterval(interval);
@@ -542,14 +551,26 @@ export default function NewSearch() {
           {analyzing ? (
             <div className="rounded-xl border border-brand-500/20 bg-brand-500/5 p-6 space-y-4">
               <div className="flex items-center gap-3">
-                <Loader2 className="w-5 h-5 text-brand-400 animate-spin" />
+                <Loader2 className="w-5 h-5 text-red-400 animate-spin" />
                 <div>
                   <p className="text-sm text-white font-medium">Analyzing footage...</p>
                   <p className="text-xs text-gray-400 mt-0.5">{analysisStep}</p>
                 </div>
-                <span className="ml-auto text-lg font-mono font-bold text-brand-400">
-                  {analysisProgress.toFixed(0)}%
-                </span>
+                <div className="ml-auto flex items-center gap-3">
+                  <span className="text-lg font-mono font-bold text-red-400">
+                    {analysisProgress.toFixed(0)}%
+                  </span>
+                  <button
+                    onClick={() => {
+                      setAnalyzing(false);
+                      setAnalysisId(null);
+                      setError('Analysis cancelled. Click Start Analysis to restart.');
+                    }}
+                    className="text-xs px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white border border-gray-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
               <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                 <div
