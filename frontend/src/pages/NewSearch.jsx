@@ -173,12 +173,12 @@ export default function NewSearch() {
         }
       } catch (pollErr) {
         failCount += 1;
-        // Allow up to 15 retries (~22s) in case Render container is momentarily busy with CPU
-        if (pollErr.response?.status === 404 || failCount >= 15) {
+        // Allow grace retries in case Render container is busy or spinning up
+        if ((pollErr.response?.status === 404 && failCount >= 6) || failCount >= 20) {
           clearInterval(interval);
           setAnalyzing(false);
           setAnalysisId(null);
-          setError('Backend connection timed out or analysis was interrupted. Please retry.');
+          setError('Backend connection timed out or analysis was interrupted. Please click Start Analysis to retry.');
         }
       }
     }, 1500);

@@ -41,10 +41,11 @@ class AttributeExtractor:
     def __init__(self, clip_matcher: Optional[ClipMatcher] = None):
         self.clip_matcher = clip_matcher or ClipMatcher()
         self._cached_prompt_embeddings: Dict[str, Dict[str, np.ndarray]] = {}
-        self._precompute_attribute_embeddings()
 
-    def _precompute_attribute_embeddings(self):
-        """Precomputes text embeddings for all attribute candidate prompts."""
+    def _ensure_attribute_embeddings(self):
+        """Lazy precomputes text embeddings for attribute candidate prompts."""
+        if self._cached_prompt_embeddings:
+            return
         for category, options in ATTRIBUTE_CATEGORIES.items():
             self._cached_prompt_embeddings[category] = {}
             for opt in options:
@@ -60,6 +61,7 @@ class AttributeExtractor:
         Extract attributes from person crop.
         Returns dictionary of detected attributes with confidence scores and visibility flag.
         """
+        self._ensure_attribute_embeddings()
         if crop is None or crop.shape[0] < min_crop_size or crop.shape[1] < min_crop_size:
             return {
                 "status": "insufficient_resolution",

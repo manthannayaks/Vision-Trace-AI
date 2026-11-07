@@ -111,14 +111,11 @@ class VideoProcessor:
                 video.total_frames = meta["total_frames"]
                 self.db.commit()
 
-                # Setup output video writer if not skipped
+                # Output video setup deferred to render step to avoid holding open file descriptors
                 output_video_path = None
-                writer = None
                 if not should_skip_annotated:
                     output_filename = f"annotated_{video.filename}"
                     output_video_path = settings.OUTPUT_DIR / output_filename
-                    annotated_fps = meta["fps"] / job.sample_rate
-                    writer = create_video_writer(output_video_path, annotated_fps, (meta["width"], meta["height"]))
 
                 # Prepare search query embeddings
                 ref_img_emb = None
@@ -259,8 +256,10 @@ class VideoProcessor:
                 self.db.commit()
 
             # 6. Render Annotated Video Output (streams frame-by-frame without memory buildup)
-            if writer is not None:
+            if not should_skip_annotated and output_video_path is not None:
                 update_progress(92.0, "Rendering annotated video output with detections")
+                annotated_fps = video.fps / job.sample_rate
+                writer = create_video_writer(output_video_path, annotated_fps, (video.width, video.height))
                 with FrameExtractor(video_path, sample_rate=job.sample_rate) as annot_extractor:
                     for frame_idx, timestamp, frame in annot_extractor.iterate_frames():
                         tracks = frame_records.get(frame_idx, (timestamp, []))[1]

@@ -15,6 +15,14 @@ def run_analysis_worker(job_id: int, auto_delete_raw: bool = False, skip_annotat
     """Background worker that opens an independent DB session and processes video."""
     db = SessionLocal()
     try:
+        # Immediately transition job to processing so frontend polling sees progress
+        job = db.query(models.AnalysisJob).filter(models.AnalysisJob.id == job_id).first()
+        if job:
+            job.status = "processing"
+            job.progress = 5.0
+            job.current_step = "Initializing surveillance detection models..."
+            db.commit()
+
         processor = VideoProcessor(db)
         processor.process_video_job(
             job_id=job_id,
@@ -22,7 +30,19 @@ def run_analysis_worker(job_id: int, auto_delete_raw: bool = False, skip_annotat
             skip_annotated_video=skip_annotated_video
         )
     except Exception as e:
-        logger.error(f"Background worker failed for job {job_id}: {e}")
+        logger.error(f"Background worker failed for job {job_id}: {e}", exc_info=True)
+        try:
+            job = db.query(models.AnalysisJob).filter(models.AnalysisJob.id == job_id).first()
+            if job:
+                job.status = "failed"
+                job.error_message = str(e)
+                video = db.query(models.Video).filter(models.Video.id == job.video_id).first()
+                if video:
+                    video.status = "failed"
+                    video.error_message = str(e)
+                db.commit()
+        except Exception as db_err:
+            logger.error(f"Failed to record failure state for job {job_id}: {db_err}")
     finally:
         db.close()
 
