@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+backend/venv/
+.env
+
+# Database
+*.db
+*.sqlite3
+
+# Ultralytics & Torch Models
+*.pt
+backend/models/Ultralytics/
+backend/models/*.pt
+
+# Video and Media Assets (Local runtime files)
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/outputs/*
+!backend/outputs/.gitkeep
+backend/candidate_images/*
+!backend/candidate_images/.gitkeep
+
+# Node / Vite
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Datasets
+datasets/mot17/*
+!datasets/mot17/README.md
+datasets/market1501/*
+!datasets/market1501/README.md
+
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
+*.ipynb_checkpoints/
+

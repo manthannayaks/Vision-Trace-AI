@@ -1,0 +1,27 @@
+# VisionTrack AI - Backend Requirements
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+sqlalchemy>=2.0.0
+python-multipart>=0.0.9
+aiofiles>=23.2.1
+websockets>=12.0
+
+# Computer Vision & Machine Learning
+torch>=2.1.0
+torchvision>=0.16.0
+ultralytics>=8.1.0
+lapx>=0.13.0
+transformers>=4.38.0
+open-clip-torch>=2.24.0
+opencv-python>=4.8.0
+pillow>=10.0.0
+numpy>=1.24.0,<2.1.0
+scikit-learn>=1.3.0
+
+# Utilities
+python-dotenv>=1.0.0
+requests>=2.31.0
+httpx>=0.27.0
+pytest>=8.0.0
