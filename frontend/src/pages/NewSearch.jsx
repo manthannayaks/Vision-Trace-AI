@@ -118,8 +118,8 @@ export default function NewSearch() {
     }
   };
 
-  // Submit person description
-  const handleCreateQuery = async () => {
+  // Validate and proceed to review (instant transition with 0 network lag)
+  const handleProceedToReview = () => {
     if (searchMode === 'text_only' && !description.trim()) {
       setError('Please enter a description of the person.');
       return;
@@ -134,32 +134,38 @@ export default function NewSearch() {
     }
 
     setError(null);
-    try {
-      const formData = new FormData();
-      if (referenceImage) formData.append('reference_image', referenceImage);
-      if (description.trim()) formData.append('description', description.trim());
-      formData.append('search_mode', searchMode);
-      formData.append('image_weight', imageWeight);
-      formData.append('text_weight', textWeight);
-
-      const res = await createSearchQuery(formData);
-      setQueryData(res.data);
-      setStep(2);
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to create search query');
-    }
+    setStep(2); // Instantly advances to Step 3!
   };
 
-  // Start analysis
+  // Start analysis: creates search query (if needed) and queues analysis
   const handleStartAnalysis = async () => {
     setAnalyzing(true);
-    setAnalysisProgress(0);
-    setAnalysisStep('Starting analysis...');
+    setAnalysisProgress(5);
+    setAnalysisStep('Registering target query profile...');
     setError(null);
     try {
+      let qId = queryData?.id || null;
+
+      // 1. Create search query profile
+      if (!qId && (referenceImage || description.trim())) {
+        const formData = new FormData();
+        if (referenceImage) formData.append('reference_image', referenceImage);
+        if (description.trim()) formData.append('description', description.trim());
+        formData.append('search_mode', searchMode);
+        formData.append('image_weight', imageWeight);
+        formData.append('text_weight', textWeight);
+
+        const qRes = await createSearchQuery(formData);
+        qId = qRes.data.id;
+        setQueryData(qRes.data);
+      }
+
+      // 2. Start analysis
+      setAnalysisProgress(12);
+      setAnalysisStep('Launching background CCTV analysis...');
       const res = await startAnalysis({
         video_id: videoData.id,
-        query_id: queryData?.id || null,
+        query_id: qId,
         sample_rate: sampleRate,
         image_weight: imageWeight,
         text_weight: textWeight,
@@ -169,7 +175,7 @@ export default function NewSearch() {
       setAnalysisId(res.data.id);
     } catch (err) {
       setAnalyzing(false);
-      setError(err.response?.data?.detail || 'Failed to start analysis');
+      setError(err.response?.data?.detail || err.message || 'Failed to start analysis');
     }
   };
 
@@ -474,12 +480,12 @@ export default function NewSearch() {
               ← Back
             </button>
             <button
-              onClick={handleCreateQuery}
+              onClick={handleProceedToReview}
               disabled={!referenceImage && !description.trim()}
-              className="flex items-center gap-2 px-6 py-2.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+              className="flex items-center gap-2 px-6 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors shadow-lg shadow-red-600/20"
             >
               Continue
-              <Play className="w-4 h-4" />
+              <Play className="w-4 h-4 fill-white" />
             </button>
           </div>
         </div>
