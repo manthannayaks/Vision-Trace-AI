@@ -2,6 +2,7 @@ import os
 import cv2
 import json
 import gc
+import time
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable, Tuple, List
@@ -148,10 +149,11 @@ class VideoProcessor:
                         ]
                         frame_records[frame_idx] = (timestamp, lightweight_tracks)
 
-                        # Periodic progress reporting
+                        # Periodic progress reporting and CPU yielding
                         if total_sampled_frames > 0 and frame_count % 5 == 0:
                             pct = 15.0 + min(55.0, (frame_count / total_sampled_frames) * 55.0)
                             update_progress(pct, f"Analyzing frame {frame_count}/{total_sampled_frames}")
+                            time.sleep(0.005)
 
             # Reclaim tracking tensors from RAM immediately
             gc.collect()
