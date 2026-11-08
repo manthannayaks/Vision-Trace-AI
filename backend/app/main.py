@@ -37,15 +37,33 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS configuration - dynamically allows Vercel and local origins with credentials
+# Bulletproof CORS configuration - allows any origin, any method, any header
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_origin_regex=r"https?://.*",
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def add_cors_headers(request, call_next):
+    """Explicitly inject CORS headers on every response, preflight, and error."""
+    origin = request.headers.get("origin") or "*"
+    if request.method == "OPTIONS":
+        from fastapi.responses import Response
+        response = Response(status_code=204)
+    else:
+        try:
+            response = await call_next(request)
+        except Exception as e:
+            from fastapi.responses import JSONResponse
+            response = JSONResponse(status_code=500, content={"detail": str(e)})
+
+    response.headers["Access-Control-Allow-Origin"] = origin
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 # Static file serving for media assets
 app.mount("/api/files/uploads", StaticFiles(directory=str(settings.UPLOAD_DIR)), name="uploads")

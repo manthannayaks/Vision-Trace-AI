@@ -173,8 +173,8 @@ export default function NewSearch() {
         }
       } catch (pollErr) {
         failCount += 1;
-        // Allow grace retries in case Render container is busy or spinning up
-        if ((pollErr.response?.status === 404 && failCount >= 6) || failCount >= 20) {
+        // Allow up to 40 retries (60s) in case cloud container is spinning up or under temporary CPU load
+        if (failCount >= 40 || (pollErr.response?.status === 404 && failCount >= 10)) {
           clearInterval(interval);
           setAnalyzing(false);
           setAnalysisId(null);
