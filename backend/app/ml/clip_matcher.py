@@ -84,21 +84,89 @@ class ClipMatcher:
 
         return embedding
 
+    @staticmethod
+    def calibrate_text_similarity(raw_sim: float) -> float:
+        """
+        Calibrates raw CLIP text-to-image cosine similarity (typically 0.18 - 0.35)
+        into an interpretable [0.0, 1.0] visual confidence scale:
+        - Below 0.22: Unrelated appearance / non-match (0% - 35%)
+        - 0.22 - 0.255: Baseline pedestrian / weak alignment (35% - 49%)
+        - 0.255 - 0.29: Positive visual match (50% - 75%)
+        - Above 0.29: Strong appearance match (75% - 98%)
+        """
+        if raw_sim is None:
+            return 0.0
+        s = float(raw_sim)
+        if s <= 0.18:
+            score = max(0.0, (s / 0.18) * 0.15)
+        elif s <= 0.22:
+            score = 0.15 + ((s - 0.18) / 0.04) * 0.20  # 0.15 -> 0.35
+        elif s <= 0.255:
+            score = 0.35 + ((s - 0.22) / 0.035) * 0.14  # 0.35 -> 0.49
+        elif s <= 0.29:
+            score = 0.50 + ((s - 0.255) / 0.035) * 0.25  # 0.50 -> 0.75
+        elif s <= 0.34:
+            score = 0.75 + ((s - 0.29) / 0.05) * 0.18   # 0.75 -> 0.93
+        else:
+            score = min(0.99, 0.93 + ((s - 0.34) / 0.10) * 0.06)
+        return round(float(score), 4)
+
+    @staticmethod
+    def calibrate_image_similarity(raw_sim: float) -> float:
+        """
+        Calibrates raw CLIP image-to-image cosine similarity (typically 0.40 - 0.90)
+        into an interpretable [0.0, 1.0] visual confidence scale:
+        - Below 0.55: Low appearance alignment / different person (0% - 48%)
+        - 0.55 - 0.70: Moderate visual alignment (50% - 68%)
+        - Above 0.70: High similarity appearance match (70% - 98%)
+        """
+        if raw_sim is None:
+            return 0.0
+        s = float(raw_sim)
+        if s <= 0.40:
+            score = max(0.0, (s / 0.40) * 0.20)
+        elif s <= 0.55:
+            score = 0.20 + ((s - 0.40) / 0.15) * 0.28  # 0.20 -> 0.48
+        elif s <= 0.70:
+            score = 0.50 + ((s - 0.55) / 0.15) * 0.20  # 0.50 -> 0.70
+        elif s <= 0.85:
+            score = 0.70 + ((s - 0.70) / 0.15) * 0.20  # 0.70 -> 0.90
+        else:
+            score = min(0.99, 0.90 + ((s - 0.85) / 0.15) * 0.09)
+        return round(float(score), 4)
+
     def get_text_embedding(self, text: str) -> np.ndarray:
         """
         Extract L2-normalized 512-d feature vector for a natural language description.
+        Applies surveillance and person-centric prompt ensembling to maximize zero-shot discrimination.
         """
         if not text or not text.strip():
             raise ValueError("Text query cannot be empty.")
 
-        inputs = self.processor(text=[text.strip()], return_tensors="pt", padding=True, truncation=True).to(self.device)
+        clean_text = text.strip()
+        lower = clean_text.lower()
+        if any(w in lower for w in ["photo", "picture", "surveillance", "footage", "camera"]):
+            prompts = [clean_text]
+        else:
+            prompts = [
+                f"a photo of a person wearing {clean_text}",
+                f"a surveillance camera photo of a person wearing {clean_text}",
+                f"a photo of a person with {clean_text}",
+                f"a security camera image of a person wearing {clean_text}",
+                clean_text
+            ]
+
+        inputs = self.processor(text=prompts, return_tensors="pt", padding=True, truncation=True).to(self.device)
         with torch.no_grad():
             text_features = self.model.get_text_features(**inputs)
             if hasattr(text_features, "pooler_output") and text_features.pooler_output is not None:
                 text_features = text_features.pooler_output
             # L2 Normalize
             text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-            embedding = text_features.cpu().numpy()[0]
+            # Average across templates & re-normalize
+            avg_features = text_features.mean(dim=0, keepdim=True)
+            avg_features = avg_features / avg_features.norm(dim=-1, keepdim=True)
+            embedding = avg_features.cpu().numpy()[0]
 
         return embedding
 
@@ -120,11 +188,7 @@ class ClipMatcher:
     ) -> Dict[str, Optional[float]]:
         """
         Match a single person crop against the reference image and/or text embeddings.
-        Returns:
-        {
-            'image_similarity': float | None,
-            'text_similarity': float | None
-        }
+        Returns calibrated visual appearance match scores [0.0, 1.0].
         """
         candidate_emb = self.get_image_embedding(candidate_crop)
 
@@ -132,10 +196,12 @@ class ClipMatcher:
         txt_sim = None
 
         if ref_image_emb is not None:
-            img_sim = round(self.cosine_similarity(ref_image_emb, candidate_emb), 4)
+            raw_img = self.cosine_similarity(ref_image_emb, candidate_emb)
+            img_sim = self.calibrate_image_similarity(raw_img)
 
         if ref_text_emb is not None:
-            txt_sim = round(self.cosine_similarity(ref_text_emb, candidate_emb), 4)
+            raw_txt = self.cosine_similarity(ref_text_emb, candidate_emb)
+            txt_sim = self.calibrate_text_similarity(raw_txt)
 
         return {
             "image_similarity": img_sim,

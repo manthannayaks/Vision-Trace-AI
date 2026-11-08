@@ -50,14 +50,24 @@ function CandidateModal({ candidate, onClose, onSeek }) {
 
         {/* Image */}
         {candidate.representative_image_url && (
-          <div className="relative rounded-lg overflow-hidden border border-red-500/30">
+          <div className={`relative rounded-lg overflow-hidden border ${
+            candidate.is_match || (candidate.combined_score ?? 0) >= 0.50
+              ? 'border-red-500/40'
+              : 'border-gray-700/50'
+          }`}>
             <img
               src={getFileUrl(candidate.representative_image_url)}
               alt="Candidate"
               className="w-full h-56 object-cover"
             />
-            <div className="absolute top-2 left-2 px-2.5 py-1 rounded bg-black/70 backdrop-blur-sm text-xs font-mono font-bold text-red-400 border border-red-500/40">
-              TARGET MATCH: {((candidate.combined_score ?? 0) * 100).toFixed(1)}%
+            <div className={`absolute top-2 left-2 px-2.5 py-1 rounded backdrop-blur-sm text-xs font-mono font-bold border ${
+              candidate.is_match || (candidate.combined_score ?? 0) >= 0.50
+                ? 'bg-black/70 text-red-400 border-red-500/40'
+                : 'bg-black/70 text-gray-400 border-gray-700'
+            }`}>
+              {candidate.is_match || (candidate.combined_score ?? 0) >= 0.50
+                ? `TARGET MATCH: ${((candidate.combined_score ?? 0) * 100).toFixed(1)}%`
+                : `NON-TARGET PEDESTRIAN: ${((candidate.combined_score ?? 0) * 100).toFixed(1)}%`}
             </div>
           </div>
         )}
@@ -250,7 +260,11 @@ export default function Results() {
           </div>
           <div>
             <p className="text-xs text-gray-500">Potential Matches</p>
-            <p className="text-sm text-red-400 font-mono font-bold">{data.total_candidates ?? 0}</p>
+            <p className={`text-sm font-mono font-bold ${
+              (data.potential_matches ?? 0) > 0 ? 'text-red-400' : 'text-gray-400'
+            }`}>
+              {data.potential_matches ?? 0}
+            </p>
           </div>
         </div>
 
@@ -271,19 +285,35 @@ export default function Results() {
           {/* Player Header */}
           <div className="p-4 border-b border-gray-800/80 flex flex-wrap items-center justify-between gap-3 bg-gray-900">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-red-500/15 flex items-center justify-center border border-red-500/30">
-                <Play className="w-4 h-4 text-red-400 fill-red-400" />
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center border ${
+                data.has_target_matches || (data.potential_matches ?? 0) > 0
+                  ? 'bg-red-500/15 border-red-500/30'
+                  : 'bg-gray-800/60 border-gray-700/50'
+              }`}>
+                <Play className={`w-4 h-4 ${
+                  data.has_target_matches || (data.potential_matches ?? 0) > 0
+                    ? 'text-red-400 fill-red-400'
+                    : 'text-gray-400 fill-gray-400'
+                }`} />
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-semibold text-white">Full CCTV Surveillance Playback</h3>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/40 font-bold flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
-                    TARGET DETECTED IN RED
-                  </span>
+                  {data.has_target_matches || (data.potential_matches ?? 0) > 0 ? (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/40 font-bold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+                      TARGET DETECTED IN RED
+                    </span>
+                  ) : (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 border border-gray-700 font-semibold flex items-center gap-1">
+                      NO TARGET MATCH DETECTED
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  The person matching the description is highlighted with a clear red bounding box and track ID
+                  {data.has_target_matches || (data.potential_matches ?? 0) > 0
+                    ? 'The person matching the description is highlighted with a clear red bounding box and track ID'
+                    : 'No person in this footage met the appearance criteria. All detected pedestrians are shown with neutral tracking.'}
                 </p>
               </div>
             </div>
@@ -379,10 +409,28 @@ export default function Results() {
         </div>
       </div>
 
+      {/* Informational Callout when 0 matches found */}
+      {data.query?.description && (data.potential_matches ?? 0) === 0 && (
+        <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs font-semibold text-amber-300">
+              No Potential Target Matches Found for "{data.query.description}"
+            </p>
+            <p className="text-xs text-amber-200/70 mt-1">
+              None of the {data.video?.unique_tracks_count ?? 0} pedestrians detected in this CCTV footage met the appearance threshold. 
+              All detected pedestrians are listed below as non-targets for reference.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Candidate Cards Grid */}
       <div>
         <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center justify-between">
-          <span>Identified Candidate Tracks ({candidates.length})</span>
+          <span>
+            {(data.potential_matches ?? 0) > 0 ? 'Target Candidates & Detected Pedestrians' : 'Detected Pedestrians in Footage'} ({candidates.length})
+          </span>
           <span className="text-xs text-gray-500">Click a card to play or view sightings</span>
         </h3>
 
@@ -390,13 +438,18 @@ export default function Results() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {candidates.map((c, i) => {
               const score = (c.combined_score ?? 0) * 100;
-              const isHigh = score >= 50;
-              const isMed = score >= 35 && score < 50;
+              const isMatch = Boolean(c.is_match || (c.combined_score ?? 0) >= 0.50);
+              const isHigh = score >= 65;
+              const isMed = score >= 50 && score < 65;
 
               return (
                 <div
                   key={c.track_db_id || i}
-                  className="group rounded-xl border border-gray-800/80 bg-gray-900/50 hover:bg-gray-800/50 hover:border-red-500/50 overflow-hidden transition-all duration-200 shadow-md"
+                  className={`group rounded-xl border overflow-hidden transition-all duration-200 shadow-md ${
+                    isMatch
+                      ? 'border-red-500/40 bg-gray-900/70 hover:border-red-500 hover:bg-gray-800/60 ring-1 ring-red-500/20'
+                      : 'border-gray-800/80 bg-gray-900/40 hover:bg-gray-800/40 hover:border-gray-700'
+                  }`}
                 >
                   {/* Image Container */}
                   <div
@@ -416,17 +469,19 @@ export default function Results() {
                     )}
 
                     {/* Rank Badge */}
-                    <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-sm text-[11px] font-mono text-white">
-                      #{i + 1}
+                    <div className={`absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md text-[11px] font-mono ${
+                      isMatch ? 'bg-red-950/80 text-red-200 border border-red-500/40' : 'bg-black/70 text-gray-400 border border-gray-800'
+                    }`}>
+                      #{i + 1} {isMatch ? 'TARGET' : 'PEDESTRIAN'}
                     </div>
 
                     {/* Score Badge */}
                     <div className={`absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-md text-xs font-mono font-bold backdrop-blur-sm ${
                       isHigh ? 'bg-red-600/30 text-red-300 border border-red-500/50' :
                       isMed  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                      'bg-gray-800/80 text-gray-400'
+                      'bg-gray-800/80 text-gray-400 border border-gray-700/50'
                     }`}>
-                      {score.toFixed(1)}%
+                      {isMatch ? `MATCH ${score.toFixed(1)}%` : `NON-TARGET ${score.toFixed(1)}%`}
                     </div>
                   </div>
 

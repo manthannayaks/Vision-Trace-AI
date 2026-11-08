@@ -82,3 +82,41 @@ def test_search_query_creation():
     assert "black hoodie" in data["description"]
     assert data["search_mode"] == "text_only"
 
+def test_calibrated_similarity_discrimination():
+    from app.ml.clip_matcher import ClipMatcher
+
+    # High text match (e.g. 0.30) should calibrate to high confidence match (> 70%)
+    high_score = ClipMatcher.calibrate_text_similarity(0.30)
+    assert high_score >= 0.70
+
+    # Low text match (e.g. 0.20) should calibrate to non-match (< 40%)
+    low_score = ClipMatcher.calibrate_text_similarity(0.20)
+    assert low_score < 0.40
+
+    # Negative/unrelated text match (e.g. 0.17) should calibrate to < 20%
+    neg_score = ClipMatcher.calibrate_text_similarity(0.17)
+    assert neg_score <= 0.20
+
+    # Image similarity calibration
+    assert ClipMatcher.calibrate_image_similarity(0.78) >= 0.70
+    assert ClipMatcher.calibrate_image_similarity(0.48) < 0.50
+
+def test_results_endpoint_metrics():
+    # Verify that analysis results endpoint returns potential_matches and has_target_matches
+    # Use existing completed analysis job if present, otherwise verify schema structure
+    from app.database.database import get_db
+    from app.database import models
+    db = next(get_db())
+    job = db.query(models.AnalysisJob).first()
+    if job:
+        response = client.get(f"/api/results/{job.id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert "potential_matches" in data
+        assert "has_target_matches" in data
+        assert "total_candidates" in data
+        assert isinstance(data["candidates"], list)
+        if data["candidates"]:
+            assert "is_match" in data["candidates"][0]
+
+

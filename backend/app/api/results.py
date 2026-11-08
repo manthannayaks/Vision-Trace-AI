@@ -67,6 +67,7 @@ def get_analysis_results(
             rep_img_path = Path(track.representative_image_path)
             rep_url = f"/api/files/candidates/{rep_img_path.name}" if rep_img_path.exists() else None
 
+            is_match = bool(evidence.get("is_match", m.combined_score >= 0.50))
             candidates.append({
                 "match_id": m.id,
                 "track_db_id": track.id,
@@ -87,6 +88,7 @@ def get_analysis_results(
                 "image_similarity": m.image_similarity,
                 "text_similarity": m.text_similarity,
                 "combined_score": m.combined_score,
+                "is_match": is_match,
                 "ranking_tier": evidence.get("ranking_tier", "Unranked"),
                 "detected_attributes": attributes.get("summary", "N/A"),
                 "attribute_details": attributes.get("attributes", {}),
@@ -121,6 +123,7 @@ def get_analysis_results(
                 "image_similarity": None,
                 "text_similarity": None,
                 "combined_score": 0.0,
+                "is_match": False,
                 "ranking_tier": "Raw Detection",
                 "detected_attributes": attributes.get("summary", "N/A"),
                 "attribute_details": attributes.get("attributes", {}),
@@ -135,6 +138,12 @@ def get_analysis_results(
     original_video_url = None
     if video and video.filename:
         original_video_url = f"/api/files/uploads/{video.filename}"
+
+    # Calculate actual potential matches that met the appearance criteria
+    potential_matches_count = sum(
+        1 for c in candidates
+        if c.get("is_match") or c.get("combined_score", 0.0) >= 0.50
+    ) if query else 0
 
     return {
         "analysis_id": job.id,
@@ -157,6 +166,8 @@ def get_analysis_results(
             "reference_image_url": f"/api/files/uploads/{Path(query.reference_image_path).name}" if query and query.reference_image_path else None
         } if query else None,
         "total_candidates": len(candidates),
+        "potential_matches": potential_matches_count,
+        "has_target_matches": potential_matches_count > 0,
         "candidates": candidates
     }
 

@@ -224,8 +224,8 @@ class VideoProcessor:
                 )
 
                 for idx, r in enumerate(ranked):
-                    # Highlight matches in vivid RED on CCTV footage (tier matches or top candidates)
-                    if r["combined_score"] >= 0.35 or (idx < 2 and r["combined_score"] >= 0.25):
+                    # Only highlight tracks that genuinely match the appearance query (Moderate or High tier >= 0.50)
+                    if r.get("is_match") or r["combined_score"] >= 0.50:
                         matching_track_scores[r["track_id"]] = r["combined_score"]
 
                     match_obj = models.MatchResult(

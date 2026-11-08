@@ -50,6 +50,10 @@ class VideoAnnotator:
             alert_text = "● TARGET DETECTED (MATCH)"
             cv2.putText(annotated, alert_text, (w - 260, 24),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.55, MATCH_RED_COLOR, 2, cv2.LINE_AA)
+        else:
+            neutral_status = "MONITORING ACTIVE"
+            cv2.putText(annotated, neutral_status, (w - 220, 24),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (140, 140, 140), 1, cv2.LINE_AA)
 
         # 2. Render each detected person track
         for trk in tracks:

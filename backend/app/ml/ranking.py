@@ -56,8 +56,9 @@ class RankingEngine:
 
         combined = round(float(combined), 4)
 
-        # Categorize similarity tier for filtering
-        if combined >= 0.70:
+        # Categorize similarity tier and active match status
+        is_match = combined >= 0.50
+        if combined >= 0.65:
             ranking_tier = "High Similarity Match"
         elif combined >= 0.50:
             ranking_tier = "Moderate Similarity Match"
@@ -71,6 +72,7 @@ class RankingEngine:
                 "image_similarity": round(image_similarity, 4) if image_similarity is not None else None,
                 "text_similarity": round(text_similarity, 4) if text_similarity is not None else None
             },
+            "is_match": is_match,
             "ranking_tier": ranking_tier,
             "disclaimer": "Potential visual appearance match requiring human review. Not biometric or criminal identification."
         }
@@ -80,6 +82,7 @@ class RankingEngine:
 
         return {
             "combined_score": combined,
+            "is_match": is_match,
             "evidence": evidence
         }
 
@@ -101,6 +104,7 @@ class RankingEngine:
             )
             cand_copy = dict(cand)
             cand_copy["combined_score"] = score_data["combined_score"]
+            cand_copy["is_match"] = score_data["is_match"]
             cand_copy["match_evidence"] = score_data["evidence"]
             ranked.append(cand_copy)
 
