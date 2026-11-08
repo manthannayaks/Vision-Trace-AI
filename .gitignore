@@ -9,8 +9,10 @@ backend/venv/
 *.db
 *.sqlite3
 
-# Ultralytics & Torch Models
+# Ultralytics & Torch Models (allow bundled nano model)
 *.pt
+!backend/yolo11n.pt
+!yolo11n.pt
 backend/models/Ultralytics/
 backend/models/*.pt
 

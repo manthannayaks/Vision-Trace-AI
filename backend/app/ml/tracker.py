@@ -58,9 +58,22 @@ class PersonTracker:
         self._load_model()
 
     def _load_model(self):
+        candidate_paths = [
+            settings.BACKEND_DIR / "yolo11n.pt",
+            settings.BASE_DIR / "yolo11n.pt",
+            Path("yolo11n.pt"),
+            Path("backend/yolo11n.pt"),
+        ]
+        target_model = self.model_name
+        for p in candidate_paths:
+            if p.exists():
+                target_model = str(p)
+                break
+        logger.info(f"Loading YOLO tracking model from: {target_model}")
         try:
-            self.model = YOLO(self.model_name)
-        except Exception:
+            self.model = YOLO(target_model)
+        except Exception as e:
+            logger.warning(f"Failed to load '{target_model}': {e}. Falling back to 'yolov8n.pt'...")
             self.model = YOLO("yolov8n.pt")
 
     def reset(self):

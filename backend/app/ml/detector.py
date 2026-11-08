@@ -26,12 +26,23 @@ class PersonDetector:
 
     def _load_model(self):
         """Loads YOLO model with graceful fallback if specific weights are missing."""
+        candidate_paths = [
+            settings.BACKEND_DIR / "yolo11n.pt",
+            settings.BASE_DIR / "yolo11n.pt",
+            Path("yolo11n.pt"),
+            Path("backend/yolo11n.pt"),
+        ]
+        target_model = self.model_name
+        for p in candidate_paths:
+            if p.exists():
+                target_model = str(p)
+                break
         try:
-            logger.info(f"Loading YOLO model '{self.model_name}' on device '{self.device}'...")
-            self.model = YOLO(self.model_name)
-            logger.info(f"YOLO model '{self.model_name}' successfully loaded.")
+            logger.info(f"Loading YOLO model '{target_model}' on device '{self.device}'...")
+            self.model = YOLO(target_model)
+            logger.info(f"YOLO model '{target_model}' successfully loaded.")
         except Exception as e:
-            logger.warning(f"Failed to load '{self.model_name}': {e}. Falling back to 'yolov8n.pt'...")
+            logger.warning(f"Failed to load '{target_model}': {e}. Falling back to 'yolov8n.pt'...")
             try:
                 self.model = YOLO("yolov8n.pt")
                 self.model_name = "yolov8n.pt"
