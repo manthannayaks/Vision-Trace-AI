@@ -67,6 +67,12 @@ class PersonTracker:
         """Reset internal track registry for a new video analysis."""
         self.active_tracks.clear()
 
+    def unload(self):
+        """Releases model from memory to keep RAM minimal on cloud containers."""
+        if self.model is not None:
+            del self.model
+            self.model = None
+
     def track_frame(self, frame: np.ndarray, timestamp: float, frame_idx: int) -> List[Dict[str, Any]]:
         """
         Processes a single video frame with ByteTrack.

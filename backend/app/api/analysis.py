@@ -1,5 +1,5 @@
 import logging
-import multiprocessing
+import threading
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -83,14 +83,13 @@ def start_analysis(
     db.commit()
     db.refresh(job)
 
-    # Launch dedicated worker process so CPU inference never blocks the Uvicorn web server
-    ctx = multiprocessing.get_context("spawn")
-    proc = ctx.Process(
+    # Launch dedicated background worker thread with sequential model loading
+    worker_thread = threading.Thread(
         target=run_analysis_worker,
         args=(job.id, req.auto_delete_raw, req.skip_annotated_video),
         daemon=True
     )
-    proc.start()
+    worker_thread.start()
 
     return job
 

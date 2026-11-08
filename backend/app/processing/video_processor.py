@@ -23,41 +23,15 @@ from app.processing.annotation import VideoAnnotator
 
 logger = logging.getLogger(__name__)
 
-# Shared singletons to prevent multiple model instances exhausting memory
-_shared_tracker: Optional[PersonTracker] = None
-_shared_clip: Optional[ClipMatcher] = None
-_shared_attr: Optional[AttributeExtractor] = None
-
-def get_shared_tracker() -> PersonTracker:
-    global _shared_tracker
-    if _shared_tracker is None:
-        _shared_tracker = PersonTracker()
-    return _shared_tracker
-
-def get_shared_clip() -> ClipMatcher:
-    global _shared_clip
-    if _shared_clip is None:
-        _shared_clip = ClipMatcher()
-    return _shared_clip
-
-def get_shared_attr(clip_matcher: ClipMatcher) -> AttributeExtractor:
-    global _shared_attr
-    if _shared_attr is None:
-        _shared_attr = AttributeExtractor(clip_matcher=clip_matcher)
-    return _shared_attr
-
 class VideoProcessor:
     """
     Complete CCTV Person Tracking & Multimodal Appearance Retrieval Pipeline.
     Processes video, extracts tracks, computes sightings, evaluates against search query,
     annotates footage, and writes structured records to database.
-    Optimized for low-memory cloud runtimes (keeps at most ONE frame in RAM).
+    Optimized for low-memory cloud runtimes (Sequential Zero-Overlap Model Pipeline).
     """
     def __init__(self, db: Session):
         self.db = db
-        self.tracker = get_shared_tracker()
-        self.clip_matcher = get_shared_clip()
-        self.attribute_extractor = get_shared_attr(self.clip_matcher)
         self.ranking_engine = RankingEngine()
         self.counting_engine = CountingEngine()
 
@@ -118,20 +92,11 @@ class VideoProcessor:
                     output_filename = f"annotated_{video.filename}"
                     output_video_path = settings.OUTPUT_DIR / output_filename
 
-                # Prepare search query embeddings
-                ref_img_emb = None
-                ref_txt_emb = None
-                if query:
-                    update_progress(10.0, "Pre-computing target query embeddings")
-                    if query.reference_image_path:
-                        img_path = Path(query.reference_image_path)
-                        if img_path.exists():
-                            ref_img_emb = self.clip_matcher.get_image_embedding(str(img_path))
-                    if query.description and query.description.strip():
-                        ref_txt_emb = self.clip_matcher.get_text_embedding(query.description.strip())
+                # 2. Sequential Stage 1: Load PersonTracker (YOLO) and Track Frames
+                update_progress(10.0, "Loading surveillance detection engine")
+                tracker = PersonTracker()
+                tracker.reset()
 
-                # 2. Tracking and Frame Analysis
-                self.tracker.reset()
                 total_sampled_frames = meta["total_frames"] // job.sample_rate
                 frame_count = 0
                 frame_records: Dict[int, Tuple[float, List[Dict[str, Any]]]] = {}
@@ -141,7 +106,7 @@ class VideoProcessor:
                 with torch.inference_mode():
                     for frame_idx, timestamp, frame in extractor.iterate_frames():
                         frame_count += 1
-                        tracks = self.tracker.track_frame(frame, timestamp, frame_idx)
+                        tracks = tracker.track_frame(frame, timestamp, frame_idx)
                         # Store lightweight detection coordinates only (NEVER keep full frame arrays in memory)
                         lightweight_tracks = [
                             {"track_id": t["track_id"], "bbox": t["bbox"], "confidence": t["confidence"]}
@@ -155,25 +120,42 @@ class VideoProcessor:
                             update_progress(pct, f"Analyzing frame {frame_count}/{total_sampled_frames}")
                             time.sleep(0.005)
 
-            # Reclaim tracking tensors from RAM immediately
-            gc.collect()
+                # Extract active track info & representative crops
+                active_tracks = tracker.active_tracks
+                metrics = self.counting_engine.compute_aggregate_metrics(active_tracks)
 
-            # 3. Aggregating Tracks and Sighting Metrics
-            update_progress(72.0, "Synthesizing sighting metrics and representative appearances")
-            metrics = self.counting_engine.compute_aggregate_metrics(self.tracker.active_tracks)
+                video.unique_tracks_count = metrics["unique_tracks_count"]
+                video.total_sightings_count = metrics["total_sightings_count"]
+                video.total_detections = metrics["total_frame_detections"]
+                self.db.commit()
 
-            video.unique_tracks_count = metrics["unique_tracks_count"]
-            video.total_sightings_count = metrics["total_sightings_count"]
-            video.total_detections = metrics["total_frame_detections"]
-            self.db.commit()
+                # UNLOAD YOLO completely from memory before loading CLIP
+                tracker.unload()
+                del tracker
+                gc.collect()
 
-            # 4. Multimodal Matching & Ranking
-            update_progress(80.0, "Matching candidates against target profile")
+            # 3. Sequential Stage 2: Load CLIP Matcher only when evaluating candidates
+            update_progress(74.0, "Loading multimodal visual matching engine")
+            clip_matcher = None
+            attribute_extractor = None
+            ref_img_emb = None
+            ref_txt_emb = None
+
+            if query:
+                clip_matcher = ClipMatcher()
+                attribute_extractor = AttributeExtractor(clip_matcher=clip_matcher)
+                if query.reference_image_path:
+                    img_path = Path(query.reference_image_path)
+                    if img_path.exists():
+                        ref_img_emb = clip_matcher.get_image_embedding(str(img_path))
+                if query.description and query.description.strip():
+                    ref_txt_emb = clip_matcher.get_text_embedding(query.description.strip())
+
             matching_track_scores: Dict[int, float] = {}
             candidates_for_ranking = []
             db_tracks = {}
 
-            for t_id, track_info in self.tracker.active_tracks.items():
+            for t_id, track_info in active_tracks.items():
                 # Save representative image crop
                 rep_crop_filename = f"track_{video.id}_{t_id}_{int(track_info.representative_timestamp)}.jpg"
                 rep_crop_path = settings.CANDIDATE_DIR / rep_crop_filename
@@ -186,7 +168,7 @@ class VideoProcessor:
                     save_image(blank, rep_crop_path)
 
                 # Extract attributes
-                attributes = self.attribute_extractor.extract_attributes(track_info.representative_crop)
+                attributes = attribute_extractor.extract_attributes(track_info.representative_crop) if attribute_extractor else {}
 
                 # Persist PersonTrack
                 db_track = models.PersonTrack(
@@ -215,9 +197,9 @@ class VideoProcessor:
                     self.db.add(sighting_obj)
 
                 # Candidate similarity comparison
-                if query and track_info.representative_crop is not None:
+                if query and clip_matcher and track_info.representative_crop is not None:
                     with torch.inference_mode():
-                        match_scores = self.clip_matcher.match_candidate(
+                        match_scores = clip_matcher.match_candidate(
                             candidate_crop=track_info.representative_crop,
                             ref_image_emb=ref_img_emb,
                             ref_text_emb=ref_txt_emb
@@ -256,6 +238,14 @@ class VideoProcessor:
                     )
                     self.db.add(match_obj)
                 self.db.commit()
+
+            # UNLOAD CLIP completely from memory before video annotation
+            if clip_matcher is not None:
+                clip_matcher.unload()
+                del clip_matcher
+                if attribute_extractor:
+                    del attribute_extractor
+                gc.collect()
 
             # 6. Render Annotated Video Output (streams frame-by-frame without memory buildup)
             if not should_skip_annotated and output_video_path is not None:

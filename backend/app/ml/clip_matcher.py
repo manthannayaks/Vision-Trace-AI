@@ -44,6 +44,16 @@ class ClipMatcher:
             logger.error(f"Failed to load CLIP model: {e}")
             raise RuntimeError(f"Could not initialize CLIP: {e}")
 
+    def unload(self):
+        """Releases model from memory to keep RAM minimal on cloud containers."""
+        if self.model is not None:
+            del self.model
+            self.model = None
+        if self.processor is not None:
+            del self.processor
+            self.processor = None
+        self._embedding_cache.clear()
+
     def get_image_embedding(self, image_input: Union[Image.Image, np.ndarray, str], cache_key: Optional[str] = None) -> np.ndarray:
         """
         Extract L2-normalized 512-d feature vector for an image (PIL Image, OpenCV BGR, or path).
