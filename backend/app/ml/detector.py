@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
 import numpy as np
 import torch
-from app.config import settings
+from app.config import settings, BACKEND_DIR, BASE_DIR
 
 os.environ["YOLO_CONFIG_DIR"] = str(settings.MODEL_DIR)
 from ultralytics import YOLO
@@ -27,8 +27,8 @@ class PersonDetector:
     def _load_model(self):
         """Loads YOLO model with graceful fallback if specific weights are missing."""
         candidate_paths = [
-            settings.BACKEND_DIR / "yolo11n.pt",
-            settings.BASE_DIR / "yolo11n.pt",
+            BACKEND_DIR / "yolo11n.pt",
+            BASE_DIR / "yolo11n.pt",
             Path("yolo11n.pt"),
             Path("backend/yolo11n.pt"),
         ]

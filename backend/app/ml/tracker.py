@@ -2,7 +2,8 @@ import os
 import logging
 from typing import List, Dict, Any, Optional
 import numpy as np
-from app.config import settings
+from pathlib import Path
+from app.config import settings, BACKEND_DIR, BASE_DIR
 
 os.environ["YOLO_CONFIG_DIR"] = str(settings.MODEL_DIR)
 from ultralytics import YOLO
@@ -59,8 +60,8 @@ class PersonTracker:
 
     def _load_model(self):
         candidate_paths = [
-            settings.BACKEND_DIR / "yolo11n.pt",
-            settings.BASE_DIR / "yolo11n.pt",
+            BACKEND_DIR / "yolo11n.pt",
+            BASE_DIR / "yolo11n.pt",
             Path("yolo11n.pt"),
             Path("backend/yolo11n.pt"),
         ]

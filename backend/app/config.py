@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     PORT: int = 8000
     DEBUG: bool = True
 
+    # Base directories exposed as attributes
+    BACKEND_DIR: Path = BACKEND_DIR
+    BASE_DIR: Path = BASE_DIR
+
     CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
