@@ -107,6 +107,7 @@ class PersonTracker:
             tracker="bytetrack.yaml",
             classes=[0],  # Person class only
             conf=self.conf_threshold,
+            imgsz=384,  # Accelerated CPU inference for surveillance footage
             device=self.device,
             verbose=False
         )

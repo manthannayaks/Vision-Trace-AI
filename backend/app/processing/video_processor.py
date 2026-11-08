@@ -77,13 +77,26 @@ class VideoProcessor:
             job.status = "processing"
             update_progress(5.0, "Reading video telemetry and metadata")
             
-            with FrameExtractor(video_path, sample_rate=job.sample_rate) as extractor:
+            # Determine optimal temporal sampling rate:
+            # For 25-30+ fps surveillance videos, 3-4 fps (every 6-8 frames) preserves full tracking
+            # continuity while speeding up CPU inference 4x-6x and preventing cloud container timeouts.
+            user_sample_rate = max(1, job.sample_rate or 2)
+            effective_sample_rate = user_sample_rate
+            if video.fps and video.fps >= 20.0 and user_sample_rate < 5:
+                effective_sample_rate = max(user_sample_rate, int(round(video.fps / 4.0)))
+
+            with FrameExtractor(video_path, sample_rate=effective_sample_rate) as extractor:
                 meta = extractor.get_metadata()
                 video.duration = meta["duration"]
                 video.fps = meta["fps"]
                 video.width = meta["width"]
                 video.height = meta["height"]
                 video.total_frames = meta["total_frames"]
+                
+                # Re-check effective sample rate with actual detected fps
+                if video.fps >= 20.0 and user_sample_rate < 5:
+                    effective_sample_rate = max(user_sample_rate, int(round(video.fps / 4.0)))
+
                 self.db.commit()
 
                 # Output video setup deferred to render step to avoid holding open file descriptors
@@ -97,11 +110,11 @@ class VideoProcessor:
                 tracker = PersonTracker()
                 tracker.reset()
 
-                total_sampled_frames = meta["total_frames"] // job.sample_rate
+                total_sampled_frames = max(1, meta["total_frames"] // effective_sample_rate)
                 frame_count = 0
                 frame_records: Dict[int, Tuple[float, List[Dict[str, Any]]]] = {}
 
-                update_progress(15.0, "Tracking persons across frames")
+                update_progress(15.0, f"Tracking persons (0/{total_sampled_frames} frames)")
 
                 with torch.inference_mode():
                     for frame_idx, timestamp, frame in extractor.iterate_frames():
@@ -114,11 +127,12 @@ class VideoProcessor:
                         ]
                         frame_records[frame_idx] = (timestamp, lightweight_tracks)
 
-                        # Periodic progress reporting and CPU yielding
-                        if total_sampled_frames > 0 and frame_count % 5 == 0:
+                        # Continuous progress reporting on every frame (or every 2 frames for longer videos)
+                        report_interval = 1 if total_sampled_frames <= 30 else 2
+                        if frame_count % report_interval == 0 or frame_count >= total_sampled_frames:
                             pct = 15.0 + min(55.0, (frame_count / total_sampled_frames) * 55.0)
                             update_progress(pct, f"Analyzing frame {frame_count}/{total_sampled_frames}")
-                            time.sleep(0.005)
+                            time.sleep(0.002)
 
                 # Extract active track info & representative crops
                 active_tracks = tracker.active_tracks
@@ -250,9 +264,9 @@ class VideoProcessor:
             # 6. Render Annotated Video Output (streams frame-by-frame without memory buildup)
             if not should_skip_annotated and output_video_path is not None:
                 update_progress(92.0, "Rendering annotated video output with detections")
-                annotated_fps = video.fps / job.sample_rate
+                annotated_fps = max(1.0, video.fps / effective_sample_rate)
                 writer = create_video_writer(output_video_path, annotated_fps, (video.width, video.height))
-                with FrameExtractor(video_path, sample_rate=job.sample_rate) as annot_extractor:
+                with FrameExtractor(video_path, sample_rate=effective_sample_rate) as annot_extractor:
                     for frame_idx, timestamp, frame in annot_extractor.iterate_frames():
                         tracks = frame_records.get(frame_idx, (timestamp, []))[1]
                         annotated = VideoAnnotator.annotate_frame(

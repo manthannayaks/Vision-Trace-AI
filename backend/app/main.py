@@ -1,4 +1,17 @@
 import os
+import sys
+
+# Silence OpenMP / BLAS multi-threading thrashing on cloud CPU containers (Render)
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
+# Silence Ultralytics settings sync, telemetry, and OS permission warnings
+os.environ["YOLO_CONFIG_DIR"] = "/tmp/ultralytics"
+os.environ["YOLO_VERBOSE"] = "False"
+
 import shutil
 from pathlib import Path
 from fastapi import FastAPI, Depends
@@ -7,7 +20,6 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 import torch
 
-# Constrain PyTorch CPU threads to keep peak RAM well within 512MB on containerized cloud runners (Render)
 try:
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)

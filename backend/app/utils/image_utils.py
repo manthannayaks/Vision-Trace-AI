@@ -33,7 +33,7 @@ def crop_person(frame: np.ndarray, bbox: Tuple[int, int, int, int], padding_pct:
     if x2 <= x1 or y2 <= y1:
         return None
 
-    crop = frame[y1:y2, x1:x2]
+    crop = frame[y1:y2, x1:x2].copy()
     return crop
 
 def save_image(img: np.ndarray, output_path: Path) -> bool:

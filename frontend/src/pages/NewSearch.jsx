@@ -156,8 +156,8 @@ export default function NewSearch() {
         failCount = 0;
         const { progress, current_step, status, error_message } = res.data;
         
-        // Ensure progress looks responsive and never regresses below 10%
-        setAnalysisProgress(Math.max(progress, status === 'processing' ? 15 : 8));
+        // Update progress smoothly based on real backend progress
+        setAnalysisProgress(progress > 0 ? progress : (status === 'processing' ? 5 : 0));
         setAnalysisStep(current_step || 'Processing CCTV video frames...');
 
         if (status === 'completed') {
