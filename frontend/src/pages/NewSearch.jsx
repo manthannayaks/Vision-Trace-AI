@@ -155,7 +155,7 @@ export default function NewSearch() {
         const res = await getAnalysisProgress(analysisId);
         failCount = 0;
         const { progress, current_step, status, error_message } = res.data;
-        
+
         // Update progress smoothly based on real backend progress
         setAnalysisProgress(progress > 0 ? progress : (status === 'processing' ? 5 : 0));
         setAnalysisStep(current_step || 'Processing CCTV video frames...');
@@ -213,11 +213,10 @@ export default function NewSearch() {
       <div className="flex items-center gap-2">
         {STEPS.map((label, i) => (
           <div key={i} className="flex items-center gap-2">
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              i < step ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' :
-              i === step ? 'bg-red-600/20 text-red-400 border border-red-500/40 ring-1 ring-red-500/30' :
-              'bg-gray-800/50 text-gray-500'
-            }`}>
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${i < step ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' :
+                i === step ? 'bg-red-600/20 text-red-400 border border-red-500/40 ring-1 ring-red-500/30' :
+                  'bg-gray-800/50 text-gray-500'
+              }`}>
               {i < step ? (
                 <CheckCircle2 className="w-3.5 h-3.5" />
               ) : (
@@ -250,11 +249,10 @@ export default function NewSearch() {
               onDragLeave={() => setDragOver(false)}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
-              className={`cursor-pointer border-2 border-dashed rounded-xl p-12 text-center transition-all ${
-                dragOver
+              className={`cursor-pointer border-2 border-dashed rounded-xl p-12 text-center transition-all ${dragOver
                   ? 'border-red-500 bg-red-500/5'
                   : 'border-gray-700 hover:border-gray-600 hover:bg-gray-900/50'
-              }`}
+                }`}
             >
               <Video className="w-12 h-12 text-gray-600 mx-auto mb-4" />
               <p className="text-white font-semibold">Drop CCTV surveillance video here or click to browse</p>
@@ -425,11 +423,10 @@ export default function NewSearch() {
           <div className="flex items-center justify-between text-xs pt-1">
             <div className="flex items-center gap-2">
               <span className="text-gray-500">Mode:</span>
-              <span className={`px-2 py-0.5 rounded-md font-medium text-[11px] ${
-                searchMode === 'both' ? 'bg-red-500/15 text-red-400 border border-red-500/30' :
-                searchMode === 'image_only' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' :
-                'bg-purple-500/15 text-purple-400 border border-purple-500/30'
-              }`}>
+              <span className={`px-2 py-0.5 rounded-md font-medium text-[11px] ${searchMode === 'both' ? 'bg-red-500/15 text-red-400 border border-red-500/30' :
+                  searchMode === 'image_only' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' :
+                    'bg-purple-500/15 text-purple-400 border border-purple-500/30'
+                }`}>
                 {searchMode === 'both' ? 'Photo + Text' : searchMode === 'image_only' ? 'Photo Only' : 'Text Only'}
               </span>
             </div>
